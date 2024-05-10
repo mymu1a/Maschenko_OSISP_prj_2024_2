@@ -3,8 +3,9 @@
 
 int main()
 {
-	struct FileData files[MAX_FILES];								// объявляем массив структур для хранения файлов и их хешей
-	int fileCount = 0;												// объявляем переменную для отслеживания количества файлов	Й
+	struct FileData files[MAX_FILES];								
+	int fileCount = 0;												
+	unsigned char savedChecksums[MAX_FILES][MD5_DIGEST_LENGTH];		
 
 	while (1)
 	{
@@ -13,17 +14,17 @@ int main()
 		if (!(scanf("%d", &chois)) || getchar() != '\n' || chois > 3 || chois < 1)
 		{
 			printf("you entered something wrong, try again\n");
-			while (getchar() != '\n');								// Очищаем буфер ввода до символа новой строки
-			continue;												// Продолжаем цикл заново
+			while (getchar() != '\n');								
+			continue;												
 		}
 		switch (chois)
 		{
 		case 1:
-			listFilesRecursively("/home/artur/test", files, &fileCount);
+			listFilesAndSaveChecksumsToFile("/home/artur/test", files, &fileCount);
 			break;
 		case 2:
-			scanDirectory("/home/artur/test", files, &fileCount);
-			compareChecksums(files, fileCount);
+			listFilesRecursively("/home/artur/test", files, &fileCount, savedChecksums);
+			compareChecksumsFromFile(files, fileCount);
 			break;
 		case 3:
 			printf("close program\n");
