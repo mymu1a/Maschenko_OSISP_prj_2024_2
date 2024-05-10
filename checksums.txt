@@ -1,0 +1,1 @@
+/home/artur/test/testfile.txt 4ae6fa37eecce7057f733d2d47a2c968

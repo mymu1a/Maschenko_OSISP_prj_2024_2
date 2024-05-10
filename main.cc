@@ -5,7 +5,6 @@ int main()
 {
 	struct FileData files[MAX_FILES];								// объявляем массив структур для хранения файлов и их хешей
 	int fileCount = 0;												// объявляем переменную для отслеживания количества файлов	Й
-	unsigned char savedChecksums[MAX_FILES][MD5_DIGEST_LENGTH];		// Массив для сохранения контрольных сумм
 
 	while (1)
 	{
@@ -20,10 +19,11 @@ int main()
 		switch (chois)
 		{
 		case 1:
-			listFilesRecursively("/home/artur/test", files, &fileCount, savedChecksums);
+			listFilesRecursively("/home/artur/test", files, &fileCount);
 			break;
 		case 2:
-			compareChecksums(files, fileCount, savedChecksums);
+			scanDirectory("/home/artur/test", files, &fileCount);
+			compareChecksums(files, fileCount);
 			break;
 		case 3:
 			printf("close program\n");

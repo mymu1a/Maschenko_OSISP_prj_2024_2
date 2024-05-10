@@ -8,10 +8,12 @@
 #define MAX_FILES 1000
 #define MD5_DIGEST_LENGTH 16
 
-void listFilesRecursively(const char* basePath, struct FileData files[], int* fileCount, unsigned char savedChecksums[MAX_FILES][MD5_DIGEST_LENGTH]);
-void compareChecksums(const struct FileData files[], int fileCount, const unsigned char savedChecksums[MAX_FILES][MD5_DIGEST_LENGTH]);
+void listFilesRecursively(const char* basePath, struct FileData files[], int* fileCount);
+void compareChecksums(const struct FileData files[], int fileCount);
+void writeChecksumsToFile(struct FileData files[], int fileCount);
 
-struct FileData {
+struct FileData 
+{
     char path[1000];
     unsigned char md5sum[MD5_DIGEST_LENGTH];
 };
@@ -29,7 +31,6 @@ void menu()
 // нахождение контрольной суммы
 void calculateMD5(const char* filePath, unsigned char* md5sum)
 {
-//    printf("START calculateMD5\n");
     FILE* file = fopen(filePath, "rb");
     if (!file)
     {
@@ -53,52 +54,167 @@ void calculateMD5(const char* filePath, unsigned char* md5sum)
     fclose(file);
 
     // Вывод контрольной суммы в stdout
-    printf("MD5     checksum for file %s: ", filePath);
+    printf("MD5 checksum for file %s: ", filePath);
     for (int i = 0; i < MD5_DIGEST_LENGTH; ++i)
     {
         printf("%02x", md5sum[i]);
     }
     printf("\n");
-//    printf("END calculateMD5\n");
 }
 
 
-//  сравнение
-void compareChecksums(const struct FileData files[], int fileCount, const unsigned char savedChecksums[][MD5_DIGEST_LENGTH])
+// сравнение
+void compareChecksums(const struct FileData files[], int fileCount)
 {
     printf("START compareChecksums\n");
 
-    for (int i = 0; i < fileCount; i++)
+    // Сначала сканируем выбранную директорию и собираем контрольные суммы файлов
+    struct FileData scannedFiles[MAX_FILES]; // Массив для сканированных файлов
+    int scannedFileCount = 0;
+
+    // Открываем файл с контрольными суммами
+    FILE* checksumsFile = fopen("checksums.txt", "r");
+    if (!checksumsFile)
     {
-        unsigned char currentChecksum[MD5_DIGEST_LENGTH];
-        calculateMD5(files[i].path, currentChecksum);
+        printf("Error opening checksums file.\n");
+        return;
+    }
+    printf("/////////////////////////////////////////////\n");
+    if (fgets(line, sizeof(line), checksumsFile) == NULL)
+    {
+        printf("Error reading line from checksums.txt\n");
+        fclose(checksumsFile);
+        return;
+    }
 
-        printf("File: %s\n", files[i].path);
-        printf("Saved Checksum: ");
-        for (int j = 0; j < MD5_DIGEST_LENGTH; j++)
-        {
-            printf("%02x", savedChecksums[i][j]);
-        }
-        printf("\n");
-        printf("Current Checksum: ");
-        for (int j = 0; j < MD5_DIGEST_LENGTH; j++)
-        {
-            printf("%02x", currentChecksum[j]);
-        }
-        printf("\n");
+    printf("Read line from checksums.txt: %s\n", line);
+    printf("fgets result: %d\n", fgets(line, sizeof(line), checksumsFile) != NULL);
+    printf("lineCount: %d\n", lineCount);
+    printf("fileCount: %d\n", fileCount);
+    printf("/////////////////////////////////////////////\n");
+    char line[1024];
+    int lineCount = 0;
 
-        if (memcmp(currentChecksum, savedChecksums[i], MD5_DIGEST_LENGTH) != 0)
+    while (fgets(line, sizeof(line), checksumsFile) != NULL && lineCount < scannedFileCount)
+    {
+        char savedPath[1024];
+        char savedChecksum[MD5_DIGEST_LENGTH * 2 + 1]; // +1 for null terminator
+
+        sscanf(line, "%s %s", savedPath, savedChecksum);
+
+        if (strcmp(savedPath, scannedFiles[lineCount].path) != 0)
         {
-            printf("Checksum mismatch for file: %s\n", files[i].path);
+            printf("File path mismatch in checksums file.\n");
+            fclose(checksumsFile);
+            return;
         }
+
+        // Преобразование md5sum к строке для сравнения
+        char currentChecksumString[MD5_DIGEST_LENGTH * 2 + 1]; // +1 for null terminator
+        for (int i = 0; i < MD5_DIGEST_LENGTH; ++i)
+        {
+            sprintf(currentChecksumString + (i * 2), "%02x", scannedFiles[lineCount].md5sum[i]);
+        }
+        currentChecksumString[MD5_DIGEST_LENGTH * 2] = '\0'; // Null terminator
+
+        if (strcmp(savedChecksum, currentChecksumString) != 0)
+        {
+            printf("Checksum mismatch for file: %s\n", scannedFiles[lineCount].path);
+        }
+
+        lineCount++;
+    }
+
+    printf("compareChecksums: Finished reading checksums file.\n");
+    fclose(checksumsFile);
+
+    if (lineCount < scannedFileCount)
+    {
+        printf("Not enough checksum entries in the file.\n");
     }
 
     printf("END compareChecksums\n");
 }
 
 // скан директории
-void listFilesRecursively(const char* basePath, struct FileData files[], int* fileCount, unsigned char savedChecksums[MAX_FILES][MD5_DIGEST_LENGTH])
+void listFilesRecursively(const char* basePath, struct FileData files[], int* fileCount)
 {
+    FILE* clearFile = fopen("checksums.txt", "w");  // Очищаем файл перед началом записи
+    fclose(clearFile);
+
+    char path[1000];
+    struct dirent* dp;
+    struct stat st;
+
+    DIR* dir = opendir(basePath);
+    if (!dir)
+    {
+        printf("Cannot open directory: %s\n", basePath);
+        return;
+    }
+
+    while ((dp = readdir(dir)) != NULL)
+    {
+        if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0)
+        {
+            sprintf(path, "%s/%s", basePath, dp->d_name);
+            stat(path, &st);
+
+            if (S_ISDIR(st.st_mode))
+            {
+                listFilesRecursively(path, files, fileCount);
+            }
+            else
+            {
+                if (*fileCount < MAX_FILES)
+                {
+                    strcpy(files[*fileCount].path, path);
+                    calculateMD5(path, files[*fileCount].md5sum);
+                    printf("Scanning file: %s\n", path);                                    // Выводим путь в stdout
+                    (*fileCount)++;
+                }
+                else
+                {
+                    printf("Max files limit reached.\n");
+                    break;
+                }
+            }
+        }
+    }
+
+    closedir(dir);
+
+    // Записываем контрольные суммы в файл
+    writeChecksumsToFile(files, *fileCount);
+}
+
+// Функция для записи контрольных сумм в файл
+void writeChecksumsToFile(struct FileData files[], int fileCount)
+{
+    FILE* file = fopen("checksums.txt", "w");
+    if (!file)
+    {
+        printf("Error opening file: checksums.txt\n");
+        return;
+    }
+
+    for (int i = 0; i < fileCount; i++)
+    {
+        fprintf(file, "%s %02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x%02x\n",
+            files[i].path,
+            files[i].md5sum[0], files[i].md5sum[1], files[i].md5sum[2], files[i].md5sum[3],
+            files[i].md5sum[4], files[i].md5sum[5], files[i].md5sum[6], files[i].md5sum[7],
+            files[i].md5sum[8], files[i].md5sum[9], files[i].md5sum[10], files[i].md5sum[11],
+            files[i].md5sum[12], files[i].md5sum[13], files[i].md5sum[14], files[i].md5sum[15]);
+    }
+
+    fclose(file);
+}
+
+// сканирование
+void scanDirectory(const char* basePath, struct FileData files[], int* fileCount)
+{
+    printf("START scanDirectory\n");
     char path[1000];
     struct dirent* dp;
     struct stat st;
@@ -120,7 +236,7 @@ void listFilesRecursively(const char* basePath, struct FileData files[], int* fi
 
             if (S_ISDIR(st.st_mode))
             {
-                listFilesRecursively(path, files, fileCount, savedChecksums);
+                scanDirectory(path, files, fileCount);
             }
             else
             {
@@ -128,8 +244,7 @@ void listFilesRecursively(const char* basePath, struct FileData files[], int* fi
                 {
                     strcpy(files[*fileCount].path, path);
                     calculateMD5(path, files[*fileCount].md5sum);
-                    memcpy(savedChecksums[*fileCount], files[*fileCount].md5sum, MD5_DIGEST_LENGTH); // Сохраняем контрольную сумму
-                    printf("Scanning file: %s\n", path);                                    // Выводим путь в stdout
+                    printf("Scanning file: %s\n", path); // Выводим путь в stdout
                     (*fileCount)++;
                 }
                 else
@@ -142,4 +257,5 @@ void listFilesRecursively(const char* basePath, struct FileData files[], int* fi
     }
 
     closedir(dir);
+    printf("END scanDirectory\n");
 }
