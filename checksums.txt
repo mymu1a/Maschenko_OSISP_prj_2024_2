@@ -1,2 +1,3 @@
-/home/artur/test/file.txt b6de4d49684d24b34c3d0485fdd7a774
-/home/artur/test/test.txt 96c860767a72bb317f5968bb44a85dfb
+/home/artur/test/file.txt d498fd8eb25f1ba22f4a12ebb9b88f2a
+/home/artur/test/test.txt c271893110367c27b5b64088c7a4dc9d
+/home/artur/test/file2.txt c03e19e69c7de6cfd00255170c1fbb38

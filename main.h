@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include <dirent.h>
 #include <string.h>
+#include <unistd.h>
+#include <pthread.h>
+#include <time.h>
 #include <sys/stat.h>
 #include <openssl/md5.h>
 #include <openssl/evp.h>
@@ -8,11 +11,26 @@
 #define MAX_FILES 1000
 #define MD5_DIGEST_LENGTH 16
 
+
 void listFilesAndSaveChecksumsToFile(const char* basePath, struct FileData files[], int* fileCount);
 void listFilesRecursively(const char* basePath, struct FileData files[], int* fileCount, unsigned char savedChecksums[MAX_FILES][MD5_DIGEST_LENGTH]);
 void compareChecksumsFromFile(const struct FileData files[], int fileCount);
+void* compareChecksums(void* arg);
 
-struct FileData {
+
+struct ThreadData
+{
+    const struct FileData* files;
+    int fileCount;
+    int threadIndex;
+    int numThreads;
+    FILE* inFile;
+    pthread_mutex_t* mutex;
+    int* currentIndex;
+};
+
+struct FileData 
+{
     char path[1000];
     unsigned char md5sum[MD5_DIGEST_LENGTH];
 };
@@ -59,65 +77,129 @@ void calculateMD5(const char* filePath, unsigned char* md5sum)
     printf("\n");
 }
 
-// Функция сравнения контрольных сумм из массива с данными из файла
-void compareChecksumsFromFile(const struct FileData files[], int fileCount)
+int readChecksum(FILE* inFile, char* path, unsigned char* md5sum, pthread_mutex_t* mutex) 
 {
-    FILE* inFile = fopen("checksums.txt", "r"); // Открываем файл для чтения
+    pthread_mutex_lock(mutex);
 
-    if (!inFile)
+    char line[1024];
+    if (!fgets(line, sizeof(line), inFile)) 
+    {
+        pthread_mutex_unlock(mutex);
+        return 0;
+    }
+
+    if (sscanf(line, "%s", path) != 1) 
+    {
+        pthread_mutex_unlock(mutex);
+        return 0;
+    }
+
+    int byteCount = 0;
+    int byteValue;
+    char hexPair[3];
+
+    for (int j = strlen(path) + 1; j < strlen(line); j += 2) 
+    {
+        strncpy(hexPair, line + j, 2);
+        hexPair[2] = '\0';
+        sscanf(hexPair, "%x", &byteValue);
+        md5sum[byteCount++] = (unsigned char)byteValue;
+    }
+
+    pthread_mutex_unlock(mutex);
+    return 1;
+}
+
+void* compareChecksums(void* arg) 
+{
+    struct ThreadData* data = (struct ThreadData*)arg;
+
+    char path[1000];
+    unsigned char md5sum[MD5_DIGEST_LENGTH];
+
+    while (1)
+    {
+        pthread_mutex_lock(data->mutex);
+        if (*data->currentIndex >= data->fileCount)
+        {
+            pthread_mutex_unlock(data->mutex);
+            break;
+        }
+
+        int fileIndex = *data->currentIndex;
+        (*data->currentIndex)++;
+        pthread_mutex_unlock(data->mutex);
+
+        if (fileIndex % data->numThreads != data->threadIndex) 
+        {
+            continue;
+        }
+
+        if (!readChecksum(data->inFile, path, md5sum, data->mutex)) 
+        {
+            break;
+        }
+
+        int match = memcmp(md5sum, data->files[fileIndex].md5sum, MD5_DIGEST_LENGTH) == 0;
+
+        printf("Thread %d - File: %s\n", data->threadIndex, path); // Добавлено отслеживание потока
+        printf("Thread %d - File MD5: ", data->threadIndex);
+        for (int j = 0; j < MD5_DIGEST_LENGTH; j++)
+        {
+            printf("%02x", md5sum[j]);
+        }
+        printf("\nThread %d - Array MD5: ", data->threadIndex);
+        for (int j = 0; j < MD5_DIGEST_LENGTH; j++) 
+        {
+            printf("%02x", data->files[fileIndex].md5sum[j]);
+        }
+        printf("\n\nThread %d - Checksum match: %s\n\n", data->threadIndex, match ? "Yes" : "No");
+    }
+
+    return NULL;
+}
+
+void compareChecksumsFromFile(const struct FileData files[], int fileCount) 
+{
+    int numThreads = 4; // Измените это значение на желаемое количество потоков
+    pthread_t threads[numThreads];
+    struct ThreadData threadData[numThreads];
+    pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+    int currentIndex = 0;
+
+    FILE* inFile = fopen("checksums.txt", "r");
+    if (!inFile) 
     {
         printf("Error opening input file.\n");
         return;
     }
 
-    char line[1024];
-    int i = 0;
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
 
-    while (fgets(line, sizeof(line), inFile))
+    for (int i = 0; i < numThreads; i++)
     {
-        char path[1000];
-        unsigned char md5sum[MD5_DIGEST_LENGTH];
-
-        if (sscanf(line, "%s", path) != 1)
-        {
-            printf("Error reading file path.\n");
-            fclose(inFile);
-            return;
-        }
-
-        int byteCount = 0;
-        int byteValue;
-        char hexPair[3];
-
-        // Считываем пары символов из строки и преобразуем их в байты контрольной суммы
-        for (int j = strlen(path) + 1; j < strlen(line); j += 2)
-        {
-            strncpy(hexPair, line + j, 2);
-            hexPair[2] = '\0';
-            sscanf(hexPair, "%x", &byteValue);
-            md5sum[byteCount++] = (unsigned char)byteValue;
-        }
-
-        // Сравниваем контрольную сумму из файла с контрольной суммой из массива
-        int match = memcmp(md5sum, files[i].md5sum, MD5_DIGEST_LENGTH) == 0;
-
-        printf("File: %s\n", path);
-        printf("File MD5: ");
-        for (int j = 0; j < MD5_DIGEST_LENGTH; j++)
-        {
-            printf("%02x", md5sum[j]);
-        }
-        printf("\nArray MD5: ");
-        for (int j = 0; j < MD5_DIGEST_LENGTH; j++)
-        {
-            printf("%02x", files[i].md5sum[j]);
-        }
-        printf("\nChecksum match: %s\n\n", match ? "Yes" : "No");
-
-        i++;
+        threadData[i].files = files;
+        threadData[i].fileCount = fileCount;
+        threadData[i].threadIndex = i;
+        threadData[i].numThreads = numThreads;
+        threadData[i].inFile = inFile;
+        threadData[i].mutex = &mutex;
+        threadData[i].currentIndex = &currentIndex;
+        pthread_create(&threads[i], NULL, compareChecksums, &threadData[i]);
     }
 
+    for (int i = 0; i < numThreads; i++) 
+    {
+        pthread_join(threads[i], NULL);
+    }
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+
     fclose(inFile);
+
+    double elapsed = (end.tv_sec - start.tv_sec) + (end.tv_nsec - start.tv_nsec) / 1e9;
+    printf("Time taken: %.2f seconds\n", elapsed);
 }
 
 void listFilesRecursively(const char* basePath, struct FileData files[], int* fileCount, unsigned char savedChecksums[MAX_FILES][MD5_DIGEST_LENGTH])
