@@ -1,3 +1,3 @@
-/home/artur/test/file.txt d498fd8eb25f1ba22f4a12ebb9b88f2a
-/home/artur/test/test.txt c271893110367c27b5b64088c7a4dc9d
-/home/artur/test/file2.txt c03e19e69c7de6cfd00255170c1fbb38
+/home/artur/test/text.txt 1fd7b73dd963fb3e5f8008810d1ff316
+/home/artur/test/tttt.txt d41d8cd98f00b204e9800998ecf8427e
+/home/artur/test/test.txt 7758ba793721d62fefcbd3b3f87c6d50

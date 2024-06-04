@@ -1,4 +1,4 @@
-#include "file_monitor.h"
+#include "func.h"
 
 void menu()
 {
@@ -42,18 +42,18 @@ void calculateMD5(const char* filePath, unsigned char* md5sum)
     printf("\n");
 }
 
-int readChecksum(FILE* inFile, char* path, unsigned char* md5sum, pthread_mutex_t* mutex) 
+int readChecksum(FILE* inFile, char* path, unsigned char* md5sum, pthread_mutex_t* mutex)
 {
     pthread_mutex_lock(mutex);
 
     char line[1024];
-    if (!fgets(line, sizeof(line), inFile)) 
+    if (!fgets(line, sizeof(line), inFile))
     {
         pthread_mutex_unlock(mutex);
         return 0;
     }
 
-    if (sscanf(line, "%s", path) != 1) 
+    if (sscanf(line, "%s", path) != 1)
     {
         pthread_mutex_unlock(mutex);
         return 0;
@@ -63,7 +63,7 @@ int readChecksum(FILE* inFile, char* path, unsigned char* md5sum, pthread_mutex_
     int byteValue;
     char hexPair[3];
 
-    for (int j = strlen(path) + 1; j < strlen(line); j += 2) 
+    for (int j = strlen(path) + 1; j < strlen(line); j += 2)
     {
         strncpy(hexPair, line + j, 2);
         hexPair[2] = '\0';
@@ -75,7 +75,7 @@ int readChecksum(FILE* inFile, char* path, unsigned char* md5sum, pthread_mutex_
     return 1;
 }
 
-void* compareChecksums(void* arg) 
+void* compareChecksums(void* arg)
 {
     struct ThreadData* data = (struct ThreadData*)arg;
 
@@ -95,12 +95,12 @@ void* compareChecksums(void* arg)
         (*data->currentIndex)++;
         pthread_mutex_unlock(data->mutex);
 
-        if (fileIndex % data->numThreads != data->threadIndex) 
+        if (fileIndex % data->numThreads != data->threadIndex)
         {
             continue;
         }
 
-        if (!readChecksum(data->inFile, path, md5sum, data->mutex)) 
+        if (!readChecksum(data->inFile, path, md5sum, data->mutex))
         {
             break;
         }
@@ -114,7 +114,7 @@ void* compareChecksums(void* arg)
             printf("%02x", md5sum[j]);
         }
         printf("\nThread %d - Array MD5: ", data->threadIndex);
-        for (int j = 0; j < MD5_DIGEST_LENGTH; j++) 
+        for (int j = 0; j < MD5_DIGEST_LENGTH; j++)
         {
             printf("%02x", data->files[fileIndex].md5sum[j]);
         }
@@ -124,7 +124,7 @@ void* compareChecksums(void* arg)
     return NULL;
 }
 
-void compareChecksumsFromFile(const struct FileData files[], int fileCount) 
+void compareChecksumsFromFile(const struct FileData files[], int fileCount)
 {
     int numThreads = 4; // Измените это значение на желаемое количество потоков
     pthread_t threads[numThreads];
@@ -133,7 +133,7 @@ void compareChecksumsFromFile(const struct FileData files[], int fileCount)
     int currentIndex = 0;
 
     FILE* inFile = fopen("checksums.txt", "r");
-    if (!inFile) 
+    if (!inFile)
     {
         printf("Error opening input file.\n");
         return;
@@ -154,7 +154,7 @@ void compareChecksumsFromFile(const struct FileData files[], int fileCount)
         pthread_create(&threads[i], NULL, compareChecksums, &threadData[i]);
     }
 
-    for (int i = 0; i < numThreads; i++) 
+    for (int i = 0; i < numThreads; i++)
     {
         pthread_join(threads[i], NULL);
     }
@@ -198,8 +198,8 @@ void listFilesRecursively(const char* basePath, struct FileData files[], int* fi
                 {
                     strcpy(files[*fileCount].path, path);
                     calculateMD5(path, files[*fileCount].md5sum);
-                    memcpy(savedChecksums[*fileCount], files[*fileCount].md5sum, MD5_DIGEST_LENGTH); 
-                    printf("Scanning file: %s\n", path);                                    
+                    memcpy(savedChecksums[*fileCount], files[*fileCount].md5sum, MD5_DIGEST_LENGTH);
+                    printf("Scanning file: %s\n", path);
                     (*fileCount)++;
                 }
                 else
