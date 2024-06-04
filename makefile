@@ -2,15 +2,25 @@ CC=gcc
 CFLAGS=-I.
 LIBS=-lssl -lcrypto
 
+# Объектные файлы
+OBJS=main.o func.o
+
+# Основная цель
 all : controller
 
-controller : main.o
+# Ссылка конечного исполняемого файла
+controller : $(OBJS)
 	$(CC) -o $@ $^ $(LIBS)
 
-main.o : main.cc main.h
+# Правило для main.o
+main.o : main.cc func.h
 	$(CC) -c $< $(CFLAGS)
 
-.PHONY: clean
+# Правило для func.o
+func.o : func.cc func.h
+	$(CC) -c $< $(CFLAGS)
 
+# Правило для очистки
+.PHONY: clean
 clean:
-	rm *.o
+	rm -f *.o controller

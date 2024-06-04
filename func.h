@@ -40,4 +40,4 @@ void menu();
 void calculateMD5(const char* filePath, unsigned char* md5sum);
 int readChecksum(FILE* inFile, char* path, unsigned char* md5sum, pthread_mutex_t* mutex);
 
-#endif // FUNC_H
+#endif FUNC_H
