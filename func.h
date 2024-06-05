@@ -28,6 +28,8 @@ struct ThreadData
     int currentFileCount;
     const struct FileData* savedFiles;
     int savedFileCount;
+    struct FileData* changedFiles;
+    int* changedFileCount;
     int threadIndex;
     int numThreads;
     pthread_mutex_t* mutex;

@@ -1,5 +1,7 @@
 #include "func.h"
 
+struct FileData changedFiles[MAX_FILES];
+int changedFileCount = 0;
 
 int main()
 {
@@ -12,7 +14,7 @@ int main()
     {
         int choice;
         menu();
-        if (!(scanf("%d", &choice)) || getchar() != '\n' || choice > 3 || choice < 1)
+        if (!(scanf("%d", &choice)) || getchar() != '\n' || choice > 4 || choice < 1)
         {
             printf("You entered something wrong, try again\n");
             while (getchar() != '\n');        // ќчистка буфера ввода
@@ -27,13 +29,15 @@ int main()
             break;
         case 2:
             currentFileCount = 0;             // —брасываем счетчик текущих файлов
-            listFilesRecursively("/home/artur", currentFiles, &currentFileCount, NULL);
             savedFileCount = 0;               // —брасываем счетчик сохраненных файлов
+
+            listFilesRecursively("/home/artur", currentFiles, &currentFileCount, NULL);
             loadChecksumsFromFile("checksums.txt", savedFiles, &savedFileCount);
             compareChecksumsFromFile(currentFiles, savedFiles, currentFileCount, savedFileCount);
             break;
         case 3:
-            viewChangedFiles(currentFiles, currentFileCount);
+            printf("Checking changed files...\n");
+            viewChangedFiles(changedFiles, changedFileCount);
             break;
         case 4:
             printf("Close program\n");

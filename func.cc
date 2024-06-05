@@ -213,13 +213,14 @@ void loadChecksumsFromFile(const char* filename, struct FileData files[], int* f
 
 void compareChecksumsFromFile(const struct FileData currentFiles[], const struct FileData savedFiles[], int currentFileCount, int savedFileCount)
 {
-    int numThreads = 4;                                     // можно изменить это значение на желаемое количество потоков
+    int numThreads = 4;  // можно изменить это значение на желаемое количество потоков
     pthread_t threads[numThreads];
     struct ThreadData threadData[numThreads];
     pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
     int currentIndex = 0;
-    struct FileData changedFiles[MAX_FILES];                // Массив для хранения измененных файлов
-    int changedFileCount = 0;                               // Счетчик измененных файлов
+
+    struct FileData changedFiles[MAX_FILES];
+    int changedFileCount = 0;
 
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
@@ -230,6 +231,8 @@ void compareChecksumsFromFile(const struct FileData currentFiles[], const struct
         threadData[i].currentFileCount = currentFileCount;
         threadData[i].savedFiles = savedFiles;
         threadData[i].savedFileCount = savedFileCount;
+        threadData[i].changedFiles = changedFiles;
+        threadData[i].changedFileCount = &changedFileCount;
         threadData[i].threadIndex = i;
         threadData[i].numThreads = numThreads;
         threadData[i].mutex = &mutex;
@@ -259,7 +262,11 @@ void compareChecksumsFromFile(const struct FileData currentFiles[], const struct
     char message[1024];
     snprintf(message, sizeof(message), "Time taken for comparison: %.2f seconds", elapsed);
     logMessage(message);
+
+    // Печать измененных файлов
+    viewChangedFiles(changedFiles, changedFileCount);
 }
+
 
 void* compareChecksums(void* arg)
 {
@@ -271,15 +278,12 @@ void* compareChecksums(void* arg)
         if (*data->currentIndex >= data->currentFileCount)
         {
             pthread_mutex_unlock(data->mutex);
-            //usleep(1);
             break;
         }
 
         int fileIndex = *data->currentIndex;
         (*data->currentIndex)++;
         pthread_mutex_unlock(data->mutex);
-
-        //usleep(1);
 
         if (fileIndex % data->numThreads != data->threadIndex)
         {
@@ -322,11 +326,11 @@ void* compareChecksums(void* arg)
 
             if (!match)
             {
-                // Файл изменился, добавляем его в массив changedFiles
                 pthread_mutex_lock(data->mutex);
-                strcpy(changedFiles[changedFileCount].path, currentFile->path);
-                memcpy(changedFiles[changedFileCount].md5sum, currentFile->md5sum, MD5_DIGEST_LENGTH);
-                changedFileCount++;
+                printf("Thread %d - Adding changed file: %s\n", data->threadIndex, currentFile->path);
+                strcpy(data->changedFiles[*data->changedFileCount].path, currentFile->path);
+                data->changedFiles[*data->changedFileCount].changed = 1;  // Устанавливаем флаг changed
+                (*data->changedFileCount)++;
                 pthread_mutex_unlock(data->mutex);
             }
         }
@@ -343,11 +347,30 @@ void* compareChecksums(void* arg)
     return NULL;
 }
 
+
 void viewChangedFiles(const struct FileData changedFiles[], int changedFileCount)
 {
     printf("Changed Files:\n");
+    int count = 0;  // Счетчик измененных файлов
     for (int i = 0; i < changedFileCount; i++)
     {
-        printf("%s\n", changedFiles[i].path);
+        if (changedFiles[i].changed)  // Проверяем, был ли файл изменен
+        {
+            printf("%s\n", changedFiles[i].path);
+            count++;
+        }
+    }
+
+    if (count == 0)
+    {
+        printf("No files have been changed.\n");
+    }
+
+    // Отладочное сообщение для проверки содержимого массива
+    for (int i = 0; i < changedFileCount; i++)
+    {
+        printf("DEBUG: Changed file path: %s, Changed flag: %d\n", changedFiles[i].path, changedFiles[i].changed);
     }
 }
+
+
